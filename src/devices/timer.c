@@ -102,25 +102,28 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks) 
 {
+  // Gamal: if ticks is negative or zero return
+  if (ticks <= 0) return;
+
   int64_t start = timer_ticks ();
 
   ASSERT (intr_get_level () == INTR_ON);
 
+  // Gamal: get current thread, set waketime, initialize semaphore
   struct thread *curr = thread_current();
   curr->waketime = start + ticks;
+  sema_init(&curr->sema_sleep, 0);
 
   // Gamal: disable interrupts to mutate global sleeping list
   enum intr_level old = intr_disable();
   list_insert_ordered(&s_threads, &curr->s_elem, insert_sleeping_thread, NULL);
 
-  // Gamal: restore previous state
-  intr_set_level(old);
-
   // Gamal: wait on sleep semaphore
   sema_down(&curr->sema_sleep);
 
-  // while (timer_elapsed (start) < ticks) 
-  //   thread_yield ();
+  // Gamal: restore previous state
+  intr_set_level(old);
+
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -197,8 +200,12 @@ timer_print_stats (void)
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
+  ticks++;
+  thread_tick ();
+
   // Gamal: wake sleeping threads
   struct list_elem *elem = list_begin(&s_threads);
+  int64_t current_ticks = timer_ticks();
   while (elem != list_end(&s_threads)) {
     struct list_elem *next = list_next(elem);
 
@@ -207,7 +214,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
     int64_t waketime = s_thread->waketime;
     
     // Gamal: if time has not elapsed break
-    if (waketime > timer_ticks()) break;
+    if (waketime > current_ticks) break;
     
     // Gamal: wake sleeping thread (move to ready queue)
     sema_up(&s_thread->sema_sleep);
@@ -217,9 +224,6 @@ timer_interrupt (struct intr_frame *args UNUSED)
 
     elem = next;
   }
-
-  ticks++;
-  thread_tick ();
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
