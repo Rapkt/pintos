@@ -484,6 +484,9 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  t->initial_priority = priority;
+  t->waiting_on = NULL;
+  list_init (&t->donations);
   t->magic = THREAD_MAGIC;
   if (thread_mlfqs) {
     if (list_empty (&all_list)) {
@@ -608,6 +611,35 @@ allocate_tid (void)
   lock_release (&tid_lock);
 
   return tid;
+}
+
+void donate_priority() {
+  struct thread *cur = thread_current();
+
+  for (int i = 0; i < THREAD_DONATION_LIMIT; i++) {
+    struct thread *holder = cur->waiting_on->holder;
+    if (holder == NULL || holder->priority >= cur->priority) break;
+
+    holder->priority = cur->priority;
+    cur = holder;
+  }
+}
+
+void recalculate_priority() {
+  struct thread *cur = thread_current();
+  int new_priority = cur->initial_priority;
+
+  if (!list_empty(&cur->donations)) {
+    struct thread *max_donor = list_entry(list_max(&cur->donations, min_priority, NULL), struct thread, donation_elem);
+  }
+  
+  cur->priority = new_priority;
+}
+
+void min_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
+  const struct thread *t1 = list_entry(a, struct thread, donation_elem);
+  const struct thread *t2 = list_entry(b, struct thread, donation_elem);
+  return t1->priority < t2->priority;
 }
 
 void mlfqs_recalculate_All_priority (struct thread *t,void *aux UNUSED) {
