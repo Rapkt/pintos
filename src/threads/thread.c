@@ -151,11 +151,13 @@ thread_tick (void)
             if (thread_current() != idle_thread) {
                 num_ready_threads++;
             }
-            load_avg = ADD_FIX(DIV_NOR(MUL_NOR(load_avg,59),60) , DIV_NOR(INT_TO_FIXED(num_ready_threads),60));
+            load_avg = ADD_FIX(
+              DIV_NOR(MUL_NOR(load_avg,59),60) ,
+              DIV_NOR(INT_TO_FIXED(num_ready_threads),60));
             // recalculating the recent cpu time and priority for every thread
             thread_foreach(mlfqs_recalculate_All_priority,NULL);
         }
-        else if (timer_ticks() % 4 == 0) {
+      if (timer_ticks() % 4 == 0) {
         mlfqs_calculate_priority(t);
       }
     }
@@ -635,7 +637,11 @@ void mlfqs_calculate_priority (struct thread *t) {
 }
 void mlfqs_recalculate_recent_cpu (struct thread *t) {
     int firstparam = MUL_NOR(load_avg,2);
-    t->recent_cpu = ADD_NOR(MUL_FIX(DIV_FIX(firstparam,ADD_NOR(firstparam,1)),t->recent_cpu),t->nice);
+    t->recent_cpu = ADD_NOR(
+      MUL_FIX(
+        DIV_FIX(firstparam,ADD_NOR(firstparam,1))
+        ,t->recent_cpu),
+        t->nice);
 }
 
 
