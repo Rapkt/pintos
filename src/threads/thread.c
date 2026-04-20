@@ -374,7 +374,9 @@ thread_set_priority (int new_priority)
   if(thread_mlfqs)return;
   struct thread *cur = thread_current ();
 
-  cur->priority = new_priority;
+  // cur->priority = new_priority;
+  cur->initial_priority = new_priority;
+  recalculate_priority();
 
   if (!list_empty (&ready_list))
     {
@@ -639,11 +641,14 @@ allocate_tid (void)
   return tid;
 }
 
-void donate_priority() {
+void donate_priority(void) {
   struct thread *cur = thread_current();
 
   for (int i = 0; i < THREAD_DONATION_LIMIT; i++) {
+    if (cur->waiting_on == NULL) break;
+
     struct thread *holder = cur->waiting_on->holder;
+
     if (holder == NULL || holder->priority >= cur->priority) break;
 
     holder->priority = cur->priority;
@@ -651,21 +656,25 @@ void donate_priority() {
   }
 }
 
-void recalculate_priority() {
+bool donation_min_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
+  const struct thread *t1 = list_entry(a, struct thread, donation_elem);
+  const struct thread *t2 = list_entry(b, struct thread, donation_elem);
+  return t1->priority < t2->priority;
+}
+
+void recalculate_priority(void) {
   struct thread *cur = thread_current();
   int new_priority = cur->initial_priority;
 
   if (!list_empty(&cur->donations)) {
-    struct thread *max_donor = list_entry(list_max(&cur->donations, min_priority, NULL), struct thread, donation_elem);
+    struct thread *max_donor = list_entry(list_max(&cur->donations, donation_min_priority, NULL), struct thread, donation_elem);
+
+    if (max_donor->priority > new_priority) {
+      new_priority = max_donor->priority;
+    }
   }
   
   cur->priority = new_priority;
-}
-
-void min_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
-  const struct thread *t1 = list_entry(a, struct thread, donation_elem);
-  const struct thread *t2 = list_entry(b, struct thread, donation_elem);
-  return t1->priority < t2->priority;
 }
 
 void mlfqs_recalculate_All_priority (struct thread *t,void *aux UNUSED) {

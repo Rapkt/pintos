@@ -158,6 +158,9 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
+void donate_priority(void);
+void recalculate_priority(void);
+
 void mlfqs_recalculate_All_priority (struct thread *t,void *aux);
 void mlfqs_calculate_priority (struct thread *t);
 void mlfqs_recalculate_recent_cpu (struct thread *t);

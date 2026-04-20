@@ -211,7 +211,7 @@ lock_acquire (struct lock *lock)
 
   if (!thread_mlfqs) {
     // If the lock is held by another thread, donate priority
-    if (lock->holder != NULL && lock->holder->priority < thread_current()->priority) {
+    if (lock->holder != NULL) {
       thread_current()->waiting_on = lock;
       list_push_back (&lock->holder->donations, &thread_current()->donation_elem);
       donate_priority();
