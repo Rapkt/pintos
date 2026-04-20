@@ -4,7 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
-
+#include "threads/synch.h"
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -102,6 +102,15 @@ struct thread
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
+    // Gamal: list element for sleeping threads list
+    struct list_elem s_elem;
+
+    // Gamal: wake up time for sleeping thread
+    int64_t waketime;
+
+    // Gamal: sleep semaphore
+    struct semaphore sema_sleep;
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
@@ -139,6 +148,8 @@ void thread_yield (void);
 typedef void thread_action_func (struct thread *t, void *aux);
 void thread_foreach (thread_action_func *, void *);
 
+bool thread_priority_less (const struct list_elem *, const struct list_elem *, void *aux);
+
 int thread_get_priority (void);
 void thread_set_priority (int);
 
@@ -146,7 +157,12 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
 void mlfqs_recalculate_All_priority (struct thread *t,void *aux);
 void mlfqs_calculate_priority (struct thread *t);
 void mlfqs_recalculate_recent_cpu (struct thread *t);
+
+// Gamal: sleeping thread insertion comparator
+bool insert_sleeping_thread(struct list_elem *a, struct list_elem *b, void *aux UNUSED);
+
 #endif /* threads/thread.h */

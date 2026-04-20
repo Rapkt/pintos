@@ -68,7 +68,7 @@ sema_down (struct semaphore *sema)
   old_level = intr_disable ();
   while (sema->value == 0) 
     {
-      list_push_back (&sema->waiters, &thread_current ()->elem);
+      list_insert_ordered (&sema->waiters, &thread_current ()->elem, thread_priority_less, NULL);
       thread_block ();
     }
   sema->value--;
@@ -109,14 +109,27 @@ void
 sema_up (struct semaphore *sema) 
 {
   enum intr_level old_level;
+  bool yield = false;
 
   ASSERT (sema != NULL);
 
   old_level = intr_disable ();
   if (!list_empty (&sema->waiters)) 
-    thread_unblock (list_entry (list_pop_front (&sema->waiters),
-                                struct thread, elem));
+    {
+      struct thread *t = list_entry (list_pop_front (&sema->waiters), struct thread, elem);
+
+      thread_unblock (t);
+      if (t->priority > thread_current ()->priority)
+        yield = true;
+    }
   sema->value++;
+  if (yield)
+    {
+      if (intr_context ())
+        intr_yield_on_return ();
+      else
+        thread_yield ();
+    }
   intr_set_level (old_level);
 }
 
@@ -276,7 +289,15 @@ struct semaphore_elem
   {
     struct list_elem elem;              /* List element. */
     struct semaphore semaphore;         /* This semaphore. */
+    int priority;                       /* Highest waiter priority. */
   };
+
+static bool semaphore_elem_priority_less (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
+{
+  const struct semaphore_elem *sema_a = list_entry (a, struct semaphore_elem, elem);
+  const struct semaphore_elem *sema_b = list_entry (b, struct semaphore_elem, elem);
+  return sema_a->priority > sema_b->priority;
+}
 
 /* Initializes condition variable COND.  A condition variable
    allows one piece of code to signal a condition and cooperating
@@ -320,7 +341,8 @@ cond_wait (struct condition *cond, struct lock *lock)
   ASSERT (lock_held_by_current_thread (lock));
   
   sema_init (&waiter.semaphore, 0);
-  list_push_back (&cond->waiters, &waiter.elem);
+  waiter.priority = thread_current ()->priority;
+  list_insert_ordered (&cond->waiters, &waiter.elem, semaphore_elem_priority_less, NULL);
   lock_release (lock);
   sema_down (&waiter.semaphore);
   lock_acquire (lock);

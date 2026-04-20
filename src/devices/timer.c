@@ -24,17 +24,30 @@ static int64_t ticks;
    Initialized by timer_calibrate(). */
 static unsigned loops_per_tick;
 
+// Gamal: sleeping threads list declaration
+struct list s_threads;
+
 static intr_handler_func timer_interrupt;
 static bool too_many_loops (unsigned loops);
 static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 static void real_time_delay (int64_t num, int32_t denom);
 
+// Gamal: sleeping thread insertion comparator
+bool insert_sleeping_thread(struct list_elem *a, struct list_elem *b, void *aux UNUSED) {
+  struct thread *t1 = list_entry(a, struct thread, s_elem);
+  struct thread *t2 = list_entry(b, struct thread, s_elem);
+  return t1->waketime < t2->waketime;
+}
+
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
 void
 timer_init (void) 
 {
+  // Gamal: initialize sleeping threads list
+  list_init(&s_threads);
+
   pit_configure_channel (0, 2, TIMER_FREQ);
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
 }
@@ -89,11 +102,28 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks) 
 {
+  // Gamal: if ticks is negative or zero return
+  if (ticks <= 0) return;
+
   int64_t start = timer_ticks ();
 
   ASSERT (intr_get_level () == INTR_ON);
-  while (timer_elapsed (start) < ticks) 
-    thread_yield ();
+
+  // Gamal: get current thread, set waketime, initialize semaphore
+  struct thread *curr = thread_current();
+  curr->waketime = start + ticks;
+  sema_init(&curr->sema_sleep, 0);
+
+  // Gamal: disable interrupts to mutate global sleeping list
+  enum intr_level old = intr_disable();
+  list_insert_ordered(&s_threads, &curr->s_elem, insert_sleeping_thread, NULL);
+
+  // Gamal: wait on sleep semaphore
+  sema_down(&curr->sema_sleep);
+
+  // Gamal: restore previous state
+  intr_set_level(old);
+
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -172,6 +202,28 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
   thread_tick ();
+
+  // Gamal: wake sleeping threads
+  struct list_elem *elem = list_begin(&s_threads);
+  int64_t current_ticks = timer_ticks();
+  while (elem != list_end(&s_threads)) {
+    struct list_elem *next = list_next(elem);
+
+    // Gamal: get sleeping thread from list
+    struct thread *s_thread = list_entry(elem, struct thread, s_elem);
+    int64_t waketime = s_thread->waketime;
+    
+    // Gamal: if time has not elapsed break
+    if (waketime > current_ticks) break;
+    
+    // Gamal: wake sleeping thread (move to ready queue)
+    sema_up(&s_thread->sema_sleep);
+
+    // Gamal: remove list_elem from s_threads
+    list_remove(elem);
+
+    elem = next;
+  }
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
