@@ -113,7 +113,22 @@ process_exit (void)
      to the kernel-only page directory. */
 	pd = cur->pagedir;
 	if (pd != NULL)
-	{
+	{	
+		printf("%s: exit(%d)\n", cur->name, cur->exit_status);
+		
+		while (!list_empty(&cur->files))
+		{
+			struct list_elem *e = list_pop_front(&cur->files);
+			struct file_descriptor *f = list_entry(e, struct file_descriptor, elem);
+			file_close(f->file);
+		}
+
+		// while (!list_empty(&cur->semaphores))
+		// {
+		// 	struct list_elem *e = list_pop_front(&cur->semaphores);
+		// 	struct semaphore_elem *s = list_entry(e, struct semaphore_elem, elem);
+		// 	sema_up(&s->semaphore);
+		// }
 		/* Correct ordering here is crucial.  We must set
          cur->pagedir to NULL before switching page directories,
          so that a timer interrupt can't switch back to the
