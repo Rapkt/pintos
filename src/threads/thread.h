@@ -90,6 +90,7 @@ struct thread
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
 
+    uint32_t pagedir; // Gamal: page directory referencem, should be assigned to thread in process_create and process_execute using page_create
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
