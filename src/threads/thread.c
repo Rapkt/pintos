@@ -471,6 +471,10 @@ init_thread (struct thread *t, const char *name, int priority)
 	t->stack = (uint8_t *) t + PGSIZE;
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
+	t->exit_status = -1;
+	t->next_fd = 2; // File descriptors numbered 0 and 1 are reserved for the console
+	list_init(&t->files);
+	list_init(&t->semaphores);
 
 	old_level = intr_disable ();
 	list_push_back (&all_list, &t->allelem);

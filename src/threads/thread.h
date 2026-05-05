@@ -90,6 +90,11 @@ struct thread
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
 
+    int exit_status;                    /* Exit code for the thread. */
+    int next_fd;                        /* The next file descriptor to be assigned. */
+    struct list files;                  /* List of all open files. */
+    struct list semaphores;             /* List of all acquired semaphores. */
+
     uint32_t pagedir; // Gamal: page directory referencem, should be assigned to thread in process_create and process_execute using page_create
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
@@ -102,6 +107,13 @@ struct thread
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
+
+struct file_descriptor
+{
+   int fd;
+   struct file *file;
+   struct list_elem elem;
+};
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
