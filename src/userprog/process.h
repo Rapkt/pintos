@@ -14,7 +14,9 @@ struct child_status {
   int exit_status;
   bool is_waited;
   bool is_exited;
+  bool parent_exited;
   struct semaphore wait_sema;
+  struct lock lock;
   struct list_elem elem;
 };
 

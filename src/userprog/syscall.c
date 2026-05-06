@@ -6,7 +6,7 @@
 #include "threads/vaddr.h"
 #include "pagedir.h"
 #include "threads/synch.h"
-
+#include "userprog/process.h"
 
 static void syscall_handler (struct intr_frame *);
 struct lock files_lock; 
@@ -131,16 +131,48 @@ void halt (void) {
 }
 
 void exit_wrapper(int status) {
-  struct thread *cur = thread_current();
-  cur->exit_status = status;
+  // Gamal: retrieve thread's child_status struct
+  struct child_status *child_status = thread_current()->child_status;
+  // Gamal: acquire lock to update child_status struct
+  lock_acquire(&child_status->lock);
+  // Gamal: check whether the parent process has already exited, if so free the child_status struct
+  if (child_status->parent_exited) {
+    free(child_status);
+  } else {
+    // Gamal: update child_status struct with exit status and mark it as exited
+    child_status->exit_status = status;
+    child_status->is_exited = true;
+
+    // Gamal: release semaphore in case parent is waiting
+    sema_up(&child_status->wait_sema);
+
+    // Gamal: remove child_status entry from the parent's list
+    list_remove(&child_status->elem);
+  }
+  lock_release(&child_status->lock);
+
+  // Gamal: release file descriptors
+  struct list_elem *e;
+  for (e = list_begin(&thread_current()->files); e != list_end(&thread_current()->files); e = list_next(&thread_current()->files)) {
+    struct file_descriptor *fd = list_entry(e, struct file_descriptor, elem);
+    close(fd->fd);
+    free(fd);
+  }
+
+  // Gamal: release all semaphores
+  for (e = list_begin(&thread_current()->semaphores); e != list_end(&thread_current()->semaphores); e = list_next(&thread_current()->semaphores)) {
+    struct semaphore_elem *sema = list_entry(e, struct semaphore_elem, elem);
+    sema_up(sema->semaphore);
+  }
+
   thread_exit(); // lock release is not done yet
 }
 
-pid_t exec (const char *cmd_line) {
+tid_t exec (const char *cmd_line) {
   // To be implemented...
 }
 
-int wait (pid_t pid) {
+int wait (tid_t pid) {
   return process_wait(pid);
 }
 
