@@ -133,10 +133,12 @@ void halt (void) {
 void exit_wrapper(int status) {
   // Gamal: retrieve thread's child_status struct
   struct child_status *child_status = thread_current()->child_status;
+  
   // Gamal: acquire lock to update child_status struct
   lock_acquire(&child_status->lock);
   // Gamal: check whether the parent process has already exited, if so free the child_status struct
   if (child_status->parent_exited) {
+    lock_release(&child_status->lock);
     free(child_status);
   } else {
     // Gamal: update child_status struct with exit status and mark it as exited
@@ -146,26 +148,48 @@ void exit_wrapper(int status) {
     // Gamal: release semaphore in case parent is waiting
     sema_up(&child_status->wait_sema);
 
-    // Gamal: remove child_status entry from the parent's list
-    list_remove(&child_status->elem);
+    lock_release(&child_status->lock);
   }
-  lock_release(&child_status->lock);
+  
 
   // Gamal: release file descriptors
-  struct list_elem *e;
-  for (e = list_begin(&thread_current()->files); e != list_end(&thread_current()->files); e = list_next(&thread_current()->files)) {
-    struct file_descriptor *fd = list_entry(e, struct file_descriptor, elem);
-    close(fd->fd);
-    free(fd);
+  while(!list_empty(&thread_current()->files)) {
+    struct list_elem *e = list_pop_front(&thread_current()->files);
+    struct file_descriptor *fd_struct = list_entry(e, struct file_descriptor, elem);
+    file_close(fd_struct->fd);
+    free(fd_struct);
   }
 
   // Gamal: release all semaphores
-  for (e = list_begin(&thread_current()->semaphores); e != list_end(&thread_current()->semaphores); e = list_next(&thread_current()->semaphores)) {
+  while(!list_empty(&thread_current()->semaphores)) {
+    struct list_elem *e = list_pop_front(&thread_current()->semaphores);
     struct semaphore_elem *sema = list_entry(e, struct semaphore_elem, elem);
+
+    // Gamal: semaphores should be freed somewhere.
     sema_up(sema->semaphore);
   }
 
-  thread_exit(); // lock release is not done yet
+  // Gamal: remove all terminated entries from the child list
+  struct list_elem *e = list_begin(&thread_current()->child_list);
+  while (e != list_end(&thread_current()->child_list)) {
+    struct child_status *child_status = list_entry(e, struct child_status, elem);
+    if (child_status->is_exited) {
+      struct list_elem *to_be_deleted = e;
+      e = list_next(e);
+      list_remove(to_be_deleted);
+      free(child_status);
+    } else {
+      e = list_next(e);
+    }
+  }
+
+  // Gamal: call exit
+  exit(status);
+}
+
+void exit (int status) {
+  printf("%s: exit(%d)\n", thread_current()->name, status);
+  thread_exit();
 }
 
 tid_t exec (const char *cmd_line) {
