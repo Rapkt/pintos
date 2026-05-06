@@ -17,6 +17,7 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
 
 /* Used for setup_stack */
 static void push_stack(int order, void **esp, char *token, char **argv, int argc);
@@ -99,6 +100,23 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+	struct thread *cur = thread_current ();
+	struct list_elem *e;
+	for (e = list_begin(&cur->child_list); e != list_end(&cur->child_list); e = list_next(e))
+	{
+		struct child_status *child_status = list_entry(e, struct child_status, elem);
+		if (child_status->tid == child_tid)
+		{
+			if (child_status->is_waited)
+				return -1;
+			child_status->is_waited = true;
+			sema_down(&child_status->wait_sema);
+			int status = child_status->exit_status;
+			list_remove(&child_status->elem);
+			free(child_status);
+			return status;
+		}
+	}
 	return -1;
 }
 
@@ -116,6 +134,12 @@ process_exit (void)
 	{	
 		printf("%s: exit(%d)\n", cur->name, cur->exit_status);
 		
+		if(cur->child_status != NULL){
+			cur->child_status->exit_status = cur->exit_status;
+			cur->child_status->is_exited = true;
+			sema_up(&cur->child_status->wait_sema);
+		}
+
 		while (!list_empty(&cur->files))
 		{
 			struct list_elem *e = list_pop_front(&cur->files);

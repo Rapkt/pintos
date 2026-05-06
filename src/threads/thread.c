@@ -13,6 +13,7 @@
 #include "threads/vaddr.h"
 #ifdef USERPROG
 #include "userprog/process.h"
+#include "threads/malloc.h"
 #endif
 
 /* Random value for struct thread's `magic' member.
@@ -183,6 +184,15 @@ thread_create (const char *name, int priority,
 	/* Initialize thread. */
 	init_thread (t, name, priority);
 	tid = t->tid = allocate_tid ();
+
+	struct child_status *child_status = malloc(sizeof(struct child_status));
+	child_status->tid = tid;
+	child_status->exit_status = -1;
+	child_status->is_waited = false;
+	child_status->is_exited = false;
+	sema_init(&child_status->wait_sema, 0);
+	t->child_status = child_status;
+	list_push_back(&thread_current()->child_list, &child_status->elem);
 
 	/* Prepare thread for first run by initializing its stack.
      Do this atomically so intermediate values for the 'stack' 
@@ -459,6 +469,7 @@ is_thread (struct thread *t)
 static void
 init_thread (struct thread *t, const char *name, int priority)
 {
+	list_init(&t->child_list);
 	enum intr_level old_level;
 
 	ASSERT (t != NULL);

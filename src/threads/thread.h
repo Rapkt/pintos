@@ -96,6 +96,8 @@ struct thread
     struct list semaphores;             /* List of all acquired semaphores. */
 
     uint32_t pagedir; // Gamal: page directory referencem, should be assigned to thread in process_create and process_execute using page_create
+    struct list child_list;           /* List of all child processes. */
+    struct child_status *child_status; /* Status of the child process. */
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 

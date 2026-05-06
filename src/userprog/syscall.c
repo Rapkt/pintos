@@ -6,7 +6,6 @@
 #include "threads/vaddr.h"
 #include "pagedir.h"
 #include "threads/synch.h"
-#include <syscall.h>
 
 
 static void syscall_handler (struct intr_frame *);
@@ -36,7 +35,7 @@ syscall_handler (struct intr_frame *f)
     /* code */
     break;
   case SYS_WAIT:
-    /* code */
+    f->eax = wait(get_arg((int *)f->esp + 1));
     break;
   case SYS_CREATE:
     char *file = get_ptr_arg((int *)f->esp + 1);
@@ -142,7 +141,7 @@ pid_t exec (const char *cmd_line) {
 }
 
 int wait (pid_t pid) {
-  // To be implemented...
+  return process_wait(pid);
 }
 
 bool create (const char *file, unsigned initial_size) {
