@@ -26,6 +26,9 @@ void syscall_init(void) {
 static void syscall_handler(struct intr_frame *f) {
   int syscall = get_arg((int *)f->esp);
   int fd;
+  char *buffer;
+  int size;
+  char *file;
   switch (syscall) {
   case SYS_HALT:
     halt();
@@ -34,24 +37,24 @@ static void syscall_handler(struct intr_frame *f) {
     exit_wrapper(get_arg((int *)f->esp + 1));
     break;
   case SYS_EXEC:
-    /* code */
+    f->eax = exec(get_ptr_arg((int *)f->esp + 1));
     break;
   case SYS_WAIT:
     f->eax = wait(get_arg((int *)f->esp + 1));
     break;
   case SYS_CREATE: {
-    char *file = get_ptr_arg((int *)f->esp + 1);
+    file = get_ptr_arg((int *)f->esp + 1);
     validate_str(file);
     unsigned initial_size = get_arg((int *)f->esp + 2);
     f->eax = create(file, initial_size);
   } break;
   case SYS_REMOVE: {
-    char *file = get_ptr_arg((int *)f->esp + 1);
+    file = get_ptr_arg((int *)f->esp + 1);
     validate_str(file);
     f->eax = remove(file);
   } break;
   case SYS_OPEN: {
-    char *file = get_ptr_arg((int *)f->esp + 1);
+    file = get_ptr_arg((int *)f->esp + 1);
     validate_str(file);
     f->eax = open(file);
   } break;
@@ -61,15 +64,15 @@ static void syscall_handler(struct intr_frame *f) {
     break;
   case SYS_READ:
     fd = get_arg((int *)f->esp + 1);
-    char *buffer = get_ptr_arg((int *)f->esp + 2);
-    int size = get_arg((int *)f->esp + 3);
+    buffer = get_ptr_arg((int *)f->esp + 2);
+    size = get_arg((int *)f->esp + 3);
     validate_buffer(buffer, size);
     f->eax = read(fd, buffer, size);
     break;
   case SYS_WRITE:
     fd = get_arg((int *)f->esp + 1);
-    char *buffer = get_ptr_arg((int *)f->esp + 2);
-    int size = get_arg((int *)f->esp + 3);
+    buffer = get_ptr_arg((int *)f->esp + 2);
+    size = get_arg((int *)f->esp + 3);
     validate_buffer(buffer, size);
     f->eax = write(fd, buffer, size);
     break;
@@ -87,12 +90,12 @@ static void syscall_handler(struct intr_frame *f) {
     close(fd);
     break;
   default:
-    // Gamal: should exit.
+    exit_wrapper(-1);
     break;
   }
 
   // printf("system call!\n");
-  thread_exit();
+  // thread_exit();
 }
 
 // Gamal: bey3addee 3ala koll character, yet2akked enno valid, we beyo2aff 3and
