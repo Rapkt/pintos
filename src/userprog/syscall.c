@@ -8,6 +8,8 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "userprog/process.h"
+#include "filesys/filesys.h"
+#include "filesys/file.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <syscall-nr.h>
@@ -58,16 +60,27 @@ static void syscall_handler(struct intr_frame *f) {
     f->eax = filesize(fd);
     break;
   case SYS_READ:
-    /* code */
+    fd = get_arg((int *)f->esp + 1);
+    char *buffer = get_ptr_arg((int *)f->esp + 2);
+    int size = get_arg((int *)f->esp + 3);
+    validate_buffer(buffer, size);
+    f->eax = read(fd, buffer, size);
     break;
   case SYS_WRITE:
-    /* code */
+    fd = get_arg((int *)f->esp + 1);
+    char *buffer = get_ptr_arg((int *)f->esp + 2);
+    int size = get_arg((int *)f->esp + 3);
+    validate_buffer(buffer, size);
+    f->eax = write(fd, buffer, size);
     break;
   case SYS_SEEK:
-    /* code */
+    fd = get_arg((int *)f->esp + 1);
+    unsigned position = get_arg((int *)f->esp + 2);
+    seek(fd, position);
     break;
   case SYS_TELL:
-    /* code */
+    fd = get_arg((int *)f->esp + 1);
+    f->eax = tell(fd);
     break;
   case SYS_CLOSE:
     fd = get_arg((int *)f->esp + 1);
@@ -216,30 +229,64 @@ int filesize(int fd) {
   return size;
 }
 
-int read(int fd, void *buffer, unsigned size) {
-  (void)fd;
-  (void)buffer;
-  (void)size;
-  return -1;
+int read (int fd, void *buffer, unsigned size) {
+  if (fd == 0) {
+    for (unsigned i = 0; i < size; i++) {
+      ((char *)buffer)[i] = input_getc();
+    }
+    return size;
+  }
+
+  // find the file descriptor struct corresponding to the given fd
+  struct file_descriptor *fd_struct = find_file_by_fd(fd);
+  if (fd_struct == NULL) return -1;
+
+  lock_acquire(&files_lock);
+  int bytes_read = file_read(fd_struct->file, buffer, size);
+  lock_release(&files_lock);
+
+  return bytes_read;
 }
 
-int write(int fd, const void *buffer, unsigned size) {
-  (void)fd;
-  (void)buffer;
-  (void)size;
-  return -1;
+int write (int fd, const void *buffer, unsigned size) {
+  // if fd is 1, write to console using putbuf and return size
+  if (fd == 1) {
+    putbuf(buffer, size);
+    return size;
+  }
+
+  // find the file descriptor struct corresponding to the given fd
+  struct file_descriptor *fd_struct = find_file_by_fd(fd);
+  // if (fd_struct == NULL) return -1; not required in the in stanford pdf, will read the test cases to check if this is needed
+
+  lock_acquire(&files_lock);
+  int bytes_written = file_write(fd_struct->file, buffer, size);
+  lock_release(&files_lock);
+
+  return bytes_written;
 }
 
-void seek(int fd, unsigned position) {
-  // To be implemented...
+void seek (int fd, unsigned position) {
+  // find the file descriptor struct corresponding to the given fd
+  struct file_descriptor *fd_struct = find_file_by_fd(fd);
+
+  lock_acquire(&files_lock);
+  file_seek(fd_struct->file, position);
+  lock_release(&files_lock);
 }
 
-unsigned tell(int fd) {
-  (void)fd;
-  return 0;
+unsigned tell (int fd) {
+  // find the file descriptor struct corresponding to the given fd
+  struct file_descriptor *fd_struct = find_file_by_fd(fd);
+
+  lock_acquire(&files_lock);
+  unsigned position = file_tell(fd_struct->file);
+  lock_release(&files_lock);
+
+  return position;
 }
 
-void close(int fd) {
+void close (int fd) {
   // find the file descriptor struct corresponding to the given fd
   struct file_descriptor *fd_struct = find_file_by_fd(fd);
 
