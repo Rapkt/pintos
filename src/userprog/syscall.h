@@ -18,8 +18,8 @@ unsigned tell (int fd);
 void close (int fd);
 struct file_descriptor *find_file_by_fd(int fd);
 int get_arg(const int *ptr);
-void *get_ptr_arg(const int *ptr);
-void check_ptr(const int *ptr);
-void validate_str(int *str);
+void *get_ptr_arg(const void *ptr);
+void check_ptr(const void *ptr);
+void validate_str(const char *str);
 #endif /* userprog/syscall.h */
 

@@ -1,5 +1,6 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
@@ -7,8 +8,12 @@
 #include "pagedir.h"
 #include "threads/synch.h"
 #include "userprog/process.h"
+#include "filesys/filesys.h"
+#include "filesys/file.h"
+#include "devices/shutdown.h"
 
 static void syscall_handler (struct intr_frame *);
+static void validate_buffer(void *buffer, int size);
 struct lock files_lock; 
 
 void
@@ -38,20 +43,26 @@ syscall_handler (struct intr_frame *f)
     f->eax = wait(get_arg((int *)f->esp + 1));
     break;
   case SYS_CREATE:
-    char *file = get_ptr_arg((int *)f->esp + 1);
-    validate_str(file);
-    unsigned initial_size = get_arg((int *)f->esp + 2);
-    f->eax = create(file, initial_size);
+    {
+      char *file = get_ptr_arg((int *)f->esp + 1);
+      validate_str(file);
+      unsigned initial_size = get_arg((int *)f->esp + 2);
+      f->eax = create(file, initial_size);
+    }
     break;
   case SYS_REMOVE:
-    char *file = get_ptr_arg((int *)f->esp + 1);
-    validate_str(file);
-    f->eax = remove(file);
+    {
+      char *file = get_ptr_arg((int *)f->esp + 1);
+      validate_str(file);
+      f->eax = remove(file);
+    }
     break;
   case SYS_OPEN:
-    char *file = get_ptr_arg((int *)f->esp + 1);
-    validate_str(file);
-    f->eax = open(file);
+    {
+      char *file = get_ptr_arg((int *)f->esp + 1);
+      validate_str(file);
+      f->eax = open(file);
+    }
     break;
   case SYS_FILESIZE:
      fd = get_arg((int *)f->esp + 1);
@@ -84,18 +95,18 @@ syscall_handler (struct intr_frame *f)
 
 // Gamal: bey3addee 3ala koll character, yet2akked enno valid, we beyo2aff 3and el null character
 // Gamal: in the case the string is not terminated, it must go outside the user space, and thus terminate the program on calling check_ptr()
-void validate_str(int *str) {
-  while(true) {
+void validate_str(const char *str) {
+  while (true) {
     check_ptr(str);
-    if (*str == '\0') break;
+    if (*str == '\0')
+      break;
     str++;
   }
-
 }
 
-void validate_buffer(int *buffer, int size) {
+static void validate_buffer(void *buffer, int size) {
   for (int i = 0; i < size; i++) {
-    check_ptr((int *)buffer + i);
+    check_ptr((char *)buffer + i);
   }
 }
 
@@ -105,23 +116,18 @@ int get_arg(const int *ptr) {
   check_ptr(ptr);
   return *ptr;
 }
-
-void *get_ptr_arg(const int *ptr) {
-  // Gamal: validate whether pointer to address is valid
+void *get_ptr_arg(const void *ptr) {
+  /* ptr is pointer to a stack word that holds an address. */
   check_ptr(ptr);
-
-  // Gamal: validate whether the address the original pointer points to is valid in
-  ptr = *(void **)ptr;
-  check_ptr(ptr);
-
-  return ptr;
+  void *addr = *(void * const *)ptr;
+  check_ptr(addr);
+  return addr;
 }
 
 
 // Gamal: validates whether pointer is valid or not
-void check_ptr(const int *ptr) {
-  if (ptr != NULL || !is_user_vaddr(ptr) || pagedir_get_page(thread_current()->pagedir, ptr) == NULL) {
-    // Gamal: process exits on any memory fault
+void check_ptr(const void *ptr) {
+  if (ptr == NULL || !is_user_vaddr(ptr) || pagedir_get_page(thread_current()->pagedir, ptr) == NULL) {
     exit_wrapper(-1);
   }
 }
@@ -131,42 +137,20 @@ void halt (void) {
 }
 
 void exit_wrapper(int status) {
-  // Gamal: retrieve thread's child_status struct
+  /* Update child status as in process_exit */
   struct child_status *child_status = thread_current()->child_status;
-  
-  // Gamal: acquire lock to update child_status struct
-  lock_acquire(&child_status->lock);
-  // Gamal: check whether the parent process has already exited, if so free the child_status struct
-  if (child_status->parent_exited) {
-    lock_release(&child_status->lock);
-    free(child_status);
-  } else {
-    // Gamal: update child_status struct with exit status and mark it as exited
+  if (child_status != NULL) {
     child_status->exit_status = status;
     child_status->is_exited = true;
-
-    // Gamal: release semaphore in case parent is waiting
     sema_up(&child_status->wait_sema);
-
-    lock_release(&child_status->lock);
   }
-  
 
-  // Gamal: release file descriptors
+  /* Release file descriptors */
   while(!list_empty(&thread_current()->files)) {
     struct list_elem *e = list_pop_front(&thread_current()->files);
     struct file_descriptor *fd_struct = list_entry(e, struct file_descriptor, elem);
-    file_close(fd_struct->fd);
+    file_close(fd_struct->file);
     free(fd_struct);
-  }
-
-  // Gamal: release all semaphores
-  while(!list_empty(&thread_current()->semaphores)) {
-    struct list_elem *e = list_pop_front(&thread_current()->semaphores);
-    struct semaphore_elem *sema = list_entry(e, struct semaphore_elem, elem);
-
-    // Gamal: semaphores should be freed somewhere.
-    sema_up(sema->semaphore);
   }
 
   // Gamal: remove all terminated entries from the child list
@@ -193,7 +177,8 @@ void exit (int status) {
 }
 
 tid_t exec (const char *cmd_line) {
-  // To be implemented...
+  (void) cmd_line;
+  return TID_ERROR;
 }
 
 int wait (tid_t pid) {
@@ -244,11 +229,17 @@ int filesize (int fd) {
 }
 
 int read (int fd, void *buffer, unsigned size) {
-  // To be implemented...
+  (void) fd;
+  (void) buffer;
+  (void) size;
+  return -1;
 }
 
 int write (int fd, const void *buffer, unsigned size) {
-  // To be implemented...
+  (void) fd;
+  (void) buffer;
+  (void) size;
+  return -1;
 }
 
 void seek (int fd, unsigned position) {
@@ -256,7 +247,8 @@ void seek (int fd, unsigned position) {
 }
 
 unsigned tell (int fd) {
-  // To be implemented...
+  (void) fd;
+  return 0;
 }
 
 void close (int fd) {
@@ -268,6 +260,7 @@ void close (int fd) {
   lock_release(&files_lock);
 
   list_remove(&fd_struct->elem);
+  free(fd_struct);
 }
 
 // helper method the find the file by its file descriptor
