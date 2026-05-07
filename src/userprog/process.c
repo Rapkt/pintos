@@ -54,7 +54,13 @@ Otherwise there's a race between the caller and load(). */
   sema_init(&helper->load_sema, 0);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create(file_name, PRI_DEFAULT, start_process, helper);
+  // extract just program name for thread name
+  char *name_copy = palloc_get_page(0);
+  strlcpy(name_copy, file_name, PGSIZE);
+  char *save_ptr_name;
+  char *prog_name = strtok_r(name_copy, " ", &save_ptr_name);
+  tid = thread_create(prog_name, PRI_DEFAULT, start_process, helper);
+  palloc_free_page(name_copy);
   if (tid == TID_ERROR) {
     palloc_free_page(helper->file_name);
     free(helper);
@@ -142,29 +148,40 @@ void process_exit(void) {
   struct thread *cur = thread_current();
   uint32_t *pd;
   printf("%s: exit(%d)\n", cur->name, cur->exit_status);
+
+  // 1. Close all files
+    while (!list_empty(&cur->files)) {
+        struct list_elem *e = list_pop_front(&cur->files);
+        struct file_descriptor *f = list_entry(e, struct file_descriptor, elem);
+        file_close(f->file);
+        free(f);
+    }
+
+    // 2. Clean up exited children
+    struct list_elem *e = list_begin(&cur->child_list);
+    while (e != list_end(&cur->child_list)) {
+        struct child_status *cs = list_entry(e, struct child_status, elem);
+        if (cs->is_exited) {
+            struct list_elem *next = list_next(e);
+            list_remove(e);
+            free(cs);
+            e = next;
+        } else {
+            e = list_next(e);
+        }
+    }
+
+    // 3. Signal parent LAST, after all cleanup is done
+    if (cur->child_status != NULL) {
+        cur->child_status->exit_status = cur->exit_status;
+        cur->child_status->is_exited = true;
+        sema_up(&cur->child_status->wait_sema);
+    }
+
   /* Destroy the current process's page directory and switch back
 to the kernel-only page directory. */
   pd = cur->pagedir;
   if (pd != NULL) {
-
-    if (cur->child_status != NULL) {
-      cur->child_status->exit_status = cur->exit_status;
-      cur->child_status->is_exited = true;
-      sema_up(&cur->child_status->wait_sema);
-    }
-
-    while (!list_empty(&cur->files)) {
-      struct list_elem *e = list_pop_front(&cur->files);
-      struct file_descriptor *f = list_entry(e, struct file_descriptor, elem);
-      file_close(f->file);
-    }
-
-    // while (!list_empty(&cur->semaphores))
-    // {
-    // 	struct list_elem *e = list_pop_front(&cur->semaphores);
-    // 	struct semaphore_elem *s = list_entry(e, struct semaphore_elem, elem);
-    // 	sema_up(&s->semaphore);
-    // }
     /* Correct ordering here is crucial.  We must set
 cur->pagedir to NULL before switching page directories,
 so that a timer interrupt can't switch back to the

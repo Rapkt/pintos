@@ -34,7 +34,7 @@ static void syscall_handler(struct intr_frame *f) {
     halt();
     break;
   case SYS_EXIT:
-    exit_wrapper(get_arg((int *)f->esp + 1));
+    exit(get_arg((int *)f->esp + 1));
     break;
   case SYS_EXEC:
     f->eax = exec(get_ptr_arg((int *)f->esp + 1));
@@ -90,7 +90,7 @@ static void syscall_handler(struct intr_frame *f) {
     close(fd);
     break;
   default:
-    exit_wrapper(-1);
+    exit(-1);
     break;
   }
 
@@ -135,50 +135,18 @@ void *get_ptr_arg(const void *ptr) {
 void check_ptr(const void *ptr) {
   if (ptr == NULL || !is_user_vaddr(ptr) ||
       pagedir_get_page(thread_current()->pagedir, ptr) == NULL) {
-    exit_wrapper(-1);
+    exit(-1);
   }
 }
 
 void halt(void) { shutdown_power_off(); }
 
-void exit_wrapper(int status) {
-  /* Update child status as in process_exit */
-  struct child_status *child_status = thread_current()->child_status;
-  if (child_status != NULL) {
-    child_status->exit_status = status;
-    child_status->is_exited = true;
-    sema_up(&child_status->wait_sema);
-  }
-
-  /* Release file descriptors */
-  while (!list_empty(&thread_current()->files)) {
-    struct list_elem *e = list_pop_front(&thread_current()->files);
-    struct file_descriptor *fd_struct =
-        list_entry(e, struct file_descriptor, elem);
-    file_close(fd_struct->file);
-    free(fd_struct);
-  }
-
-  // Gamal: remove all terminated entries from the child list
-  struct list_elem *e = list_begin(&thread_current()->child_list);
-  while (e != list_end(&thread_current()->child_list)) {
-    struct child_status *child_status =
-        list_entry(e, struct child_status, elem);
-    if (child_status->is_exited) {
-      struct list_elem *to_be_deleted = e;
-      e = list_next(e);
-      list_remove(to_be_deleted);
-      free(child_status);
-    } else {
-      e = list_next(e);
-    }
-  }
-
-  // Gamal: call exit
-  exit(status);
+void exit(int status) {
+  thread_current()->exit_status = status;
+  thread_exit();
 }
 
-void exit(int status) { thread_exit(); }
+// void exit(int status) { thread_exit(); }
 
 tid_t exec(const char *cmd_line) {
   (void)cmd_line;
@@ -292,6 +260,7 @@ unsigned tell (int fd) {
 void close (int fd) {
   // find the file descriptor struct corresponding to the given fd
   struct file_descriptor *fd_struct = find_file_by_fd(fd);
+  if (fd_struct == NULL) exit(-1); // if fd is invalid, exit with error status
 
   lock_acquire(&files_lock);
   file_close(fd_struct->file);
