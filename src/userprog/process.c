@@ -95,8 +95,8 @@ static void start_process(void *file_name_) {
     thread_exit();
   }
 
-  if_.esp -= sizeof(void *);
-  *(void **)if_.esp = NULL;
+  // if_.esp -= sizeof(void *);
+  // *(void **)if_.esp = NULL;
   /* Start the user process by simulating a return from an
 interrupt, implemented by intr_exit (in
 threads/intr-stubs.S).  Because intr_exit takes all of its

@@ -11,6 +11,8 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
+#include "threads/malloc.h"
+#include "userprog/process.h"
 #ifdef USERPROG
 #include "threads/malloc.h"
 #include "userprog/process.h"
