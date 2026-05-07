@@ -228,7 +228,7 @@ int write (int fd, const void *buffer, unsigned size) {
 
   // find the file descriptor struct corresponding to the given fd
   struct file_descriptor *fd_struct = find_file_by_fd(fd);
-  // if (fd_struct == NULL) return -1; not required in the in stanford pdf, will read the test cases to check if this is needed
+  if (fd_struct == NULL) exit(-1); // if fd is invalid, exit with error status
 
   lock_acquire(&files_lock);
   int bytes_written = file_write(fd_struct->file, buffer, size);
