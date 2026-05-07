@@ -22,7 +22,7 @@ static void
 syscall_handler (struct intr_frame *f) 
 {
   int syscall = get_arg((int *)f->esp);
-
+  int fd;
   switch (syscall)
   {
   case SYS_HALT:
@@ -54,7 +54,7 @@ syscall_handler (struct intr_frame *f)
     f->eax = open(file);
     break;
   case SYS_FILESIZE:
-    int fd = get_arg((int *)f->esp + 1);
+     fd = get_arg((int *)f->esp + 1);
     f->eax = filesize(fd);
     break;
   case SYS_READ:
@@ -70,7 +70,7 @@ syscall_handler (struct intr_frame *f)
     /* code */
     break;
   case SYS_CLOSE:
-    int fd = get_arg((int *)f->esp + 1);
+     fd = get_arg((int *)f->esp + 1);
     close(fd);
     break;
   default:
@@ -101,7 +101,7 @@ void validate_buffer(int *buffer, int size) {
 
 // Gamal: validates pointer to input, if valid it derefernces it and returns it
 // Gamal: Example use: get_arg((int *)fd->esp + i), where 'i' is the agrument number. ya3ny lw 3ayz awl arg, yeb2a 1, lw tany arg yeb2a 2...
-static int get_arg(const int *ptr) {
+int get_arg(const int *ptr) {
   check_ptr(ptr);
   return *ptr;
 }

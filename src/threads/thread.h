@@ -87,15 +87,15 @@ struct thread {
   uint8_t *stack;            /* Saved stack pointer. */
   int priority;              /* Priority. */
   struct list_elem allelem;  /* List element for all threads list. */
-  int exit_status;
-  int exit_status;        /* Exit code for the thread. */
-  int next_fd;            /* The next file descriptor to be assigned. */
-  struct list files;      /* List of all open files. */
-  struct list semaphores; /* List of all acquired semaphores. */
-
-  uint32_t
-      pagedir; // Gamal: page directory referencem, should be assigned to thread
-               // in process_create and process_execute using page_create
+  int exit_status;           /* Exit code for the thread. */
+  int next_fd;               /* The next file descriptor to be assigned. */
+  struct list files;         /* List of all open files. */
+  struct list semaphores;    /* List of all acquired semaphores. */
+  //
+  // uint32_t
+  //     pagedir; // Gamal: page directory referencem, should be assigned to
+  //     thread
+  // in process_create and process_execute using page_create
   struct list child_list;            /* List of all child processes. */
   struct child_status *child_status; /* Status of the child process. */
   /* Shared between thread.c and synch.c. */
@@ -116,10 +116,10 @@ struct file_descriptor {
   struct list_elem elem;
 };
 
-struct semaphore_elem {
-   struct semaphore *semaphore;
-   struct list_elem elem;
-};
+// struct semaphore_elem {
+//   struct semaphore *semaphore;
+//   struct list_elem elem;
+// };
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.

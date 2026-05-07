@@ -51,7 +51,7 @@ Otherwise there's a race between the caller and load(). */
   }
   strlcpy(helper->file_name, file_name, PGSIZE);
   // intit semaphore to 0 so the parent blocks immediatley
-  semaphore_init(&helper->load_sema, 0);
+  sema_init(&helper->load_sema, 0);
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create(file_name, PRI_DEFAULT, start_process, helper);
@@ -76,7 +76,8 @@ static void start_process(void *file_name_) {
   struct exec_helper *helper = (struct exec_helper *)file_name_;
   struct intr_frame if_;
   bool success;
-
+  char *save_ptr;
+  helper->file_name = strtok_r(helper->file_name, " ", &save_ptr);
   /* Initialize interrupt frame and load executable. */
   memset(&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
@@ -87,8 +88,12 @@ static void start_process(void *file_name_) {
   // make the child signal the parent to wake up
   sema_up(&helper->load_sema);
   /* If load failed, quit. */
-  if (!success)
+  if (!success) {
+    thread_current()->exit_status = -1;
+    thread_current()->child_status->exit_status = -1;
+    sema_up(&thread_current()->child_status->wait_sema);
     thread_exit();
+  }
 
   if_.esp -= sizeof(void *);
   *(void **)if_.esp = NULL;
