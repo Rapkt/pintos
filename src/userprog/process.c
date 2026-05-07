@@ -146,7 +146,6 @@ void process_exit(void) {
 to the kernel-only page directory. */
   pd = cur->pagedir;
   if (pd != NULL) {
-    printf("%s: exit(%d)\n", cur->name, cur->exit_status);
 
     if (cur->child_status != NULL) {
       cur->child_status->exit_status = cur->exit_status;

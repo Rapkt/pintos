@@ -1,35 +1,30 @@
 #include "userprog/syscall.h"
+#include "devices/shutdown.h"
+#include "filesys/file.h"
+#include "filesys/filesys.h"
+#include "pagedir.h"
+#include "threads/interrupt.h"
+#include "threads/synch.h"
+#include "threads/thread.h"
+#include "threads/vaddr.h"
+#include "userprog/process.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <syscall-nr.h>
-#include "threads/interrupt.h"
-#include "threads/thread.h"
-#include "threads/vaddr.h"
-#include "pagedir.h"
-#include "threads/synch.h"
-#include "userprog/process.h"
-#include "filesys/filesys.h"
-#include "filesys/file.h"
-#include "devices/shutdown.h"
 
-static void syscall_handler (struct intr_frame *);
+static void syscall_handler(struct intr_frame *);
 static void validate_buffer(void *buffer, int size);
-struct lock files_lock; 
+struct lock files_lock;
 
-void
-syscall_init (void) 
-{
+void syscall_init(void) {
   lock_init(&files_lock);
-  intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
+  intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
-static void
-syscall_handler (struct intr_frame *f) 
-{
+static void syscall_handler(struct intr_frame *f) {
   int syscall = get_arg((int *)f->esp);
   int fd;
-  switch (syscall)
-  {
+  switch (syscall) {
   case SYS_HALT:
     halt();
     break;
@@ -42,30 +37,24 @@ syscall_handler (struct intr_frame *f)
   case SYS_WAIT:
     f->eax = wait(get_arg((int *)f->esp + 1));
     break;
-  case SYS_CREATE:
-    {
-      char *file = get_ptr_arg((int *)f->esp + 1);
-      validate_str(file);
-      unsigned initial_size = get_arg((int *)f->esp + 2);
-      f->eax = create(file, initial_size);
-    }
-    break;
-  case SYS_REMOVE:
-    {
-      char *file = get_ptr_arg((int *)f->esp + 1);
-      validate_str(file);
-      f->eax = remove(file);
-    }
-    break;
-  case SYS_OPEN:
-    {
-      char *file = get_ptr_arg((int *)f->esp + 1);
-      validate_str(file);
-      f->eax = open(file);
-    }
-    break;
+  case SYS_CREATE: {
+    char *file = get_ptr_arg((int *)f->esp + 1);
+    validate_str(file);
+    unsigned initial_size = get_arg((int *)f->esp + 2);
+    f->eax = create(file, initial_size);
+  } break;
+  case SYS_REMOVE: {
+    char *file = get_ptr_arg((int *)f->esp + 1);
+    validate_str(file);
+    f->eax = remove(file);
+  } break;
+  case SYS_OPEN: {
+    char *file = get_ptr_arg((int *)f->esp + 1);
+    validate_str(file);
+    f->eax = open(file);
+  } break;
   case SYS_FILESIZE:
-     fd = get_arg((int *)f->esp + 1);
+    fd = get_arg((int *)f->esp + 1);
     f->eax = filesize(fd);
     break;
   case SYS_READ:
@@ -81,7 +70,7 @@ syscall_handler (struct intr_frame *f)
     /* code */
     break;
   case SYS_CLOSE:
-     fd = get_arg((int *)f->esp + 1);
+    fd = get_arg((int *)f->esp + 1);
     close(fd);
     break;
   default:
@@ -89,12 +78,13 @@ syscall_handler (struct intr_frame *f)
     break;
   }
 
-  printf ("system call!\n");
-  thread_exit ();
+  // printf("system call!\n");
+  thread_exit();
 }
 
-// Gamal: bey3addee 3ala koll character, yet2akked enno valid, we beyo2aff 3and el null character
-// Gamal: in the case the string is not terminated, it must go outside the user space, and thus terminate the program on calling check_ptr()
+// Gamal: bey3addee 3ala koll character, yet2akked enno valid, we beyo2aff 3and
+// el null character Gamal: in the case the string is not terminated, it must go
+// outside the user space, and thus terminate the program on calling check_ptr()
 void validate_str(const char *str) {
   while (true) {
     check_ptr(str);
@@ -111,7 +101,8 @@ static void validate_buffer(void *buffer, int size) {
 }
 
 // Gamal: validates pointer to input, if valid it derefernces it and returns it
-// Gamal: Example use: get_arg((int *)fd->esp + i), where 'i' is the agrument number. ya3ny lw 3ayz awl arg, yeb2a 1, lw tany arg yeb2a 2...
+// Gamal: Example use: get_arg((int *)fd->esp + i), where 'i' is the agrument
+// number. ya3ny lw 3ayz awl arg, yeb2a 1, lw tany arg yeb2a 2...
 int get_arg(const int *ptr) {
   check_ptr(ptr);
   return *ptr;
@@ -119,22 +110,20 @@ int get_arg(const int *ptr) {
 void *get_ptr_arg(const void *ptr) {
   /* ptr is pointer to a stack word that holds an address. */
   check_ptr(ptr);
-  void *addr = *(void * const *)ptr;
+  void *addr = *(void *const *)ptr;
   check_ptr(addr);
   return addr;
 }
 
-
 // Gamal: validates whether pointer is valid or not
 void check_ptr(const void *ptr) {
-  if (ptr == NULL || !is_user_vaddr(ptr) || pagedir_get_page(thread_current()->pagedir, ptr) == NULL) {
+  if (ptr == NULL || !is_user_vaddr(ptr) ||
+      pagedir_get_page(thread_current()->pagedir, ptr) == NULL) {
     exit_wrapper(-1);
   }
 }
 
-void halt (void) {
-  shutdown_power_off();
-}
+void halt(void) { shutdown_power_off(); }
 
 void exit_wrapper(int status) {
   /* Update child status as in process_exit */
@@ -146,9 +135,10 @@ void exit_wrapper(int status) {
   }
 
   /* Release file descriptors */
-  while(!list_empty(&thread_current()->files)) {
+  while (!list_empty(&thread_current()->files)) {
     struct list_elem *e = list_pop_front(&thread_current()->files);
-    struct file_descriptor *fd_struct = list_entry(e, struct file_descriptor, elem);
+    struct file_descriptor *fd_struct =
+        list_entry(e, struct file_descriptor, elem);
     file_close(fd_struct->file);
     free(fd_struct);
   }
@@ -156,7 +146,8 @@ void exit_wrapper(int status) {
   // Gamal: remove all terminated entries from the child list
   struct list_elem *e = list_begin(&thread_current()->child_list);
   while (e != list_end(&thread_current()->child_list)) {
-    struct child_status *child_status = list_entry(e, struct child_status, elem);
+    struct child_status *child_status =
+        list_entry(e, struct child_status, elem);
     if (child_status->is_exited) {
       struct list_elem *to_be_deleted = e;
       e = list_next(e);
@@ -171,43 +162,40 @@ void exit_wrapper(int status) {
   exit(status);
 }
 
-void exit (int status) {
-  printf("%s: exit(%d)\n", thread_current()->name, status);
-  thread_exit();
+void exit(int status) { thread_exit(); }
+
+tid_t exec(const char *cmd_line) {
+  (void)cmd_line;
+  return process_execute(cmd_line);
 }
 
-tid_t exec (const char *cmd_line) {
-  (void) cmd_line;
-  return TID_ERROR;
-}
+int wait(tid_t pid) { return process_wait(pid); }
 
-int wait (tid_t pid) {
-  return process_wait(pid);
-}
-
-bool create (const char *file, unsigned initial_size) {
+bool create(const char *file, unsigned initial_size) {
   lock_acquire(&files_lock);
   bool result = filesys_create(file, initial_size);
   lock_release(&files_lock);
   return result;
 }
 
-bool remove (const char *file) {
+bool remove(const char *file) {
   lock_acquire(&files_lock);
   bool result = filesys_remove(file);
   lock_release(&files_lock);
   return result;
 }
 
-int open (const char *file) {
+int open(const char *file) {
   lock_acquire(&files_lock);
   struct file *f = filesys_open(file);
   lock_release(&files_lock);
 
   // if file does not exist, return -1
-  if (f == NULL) return -1;
+  if (f == NULL)
+    return -1;
 
-  // create file descriptor struct and add it to the list of open files for the current thread
+  // create file descriptor struct and add it to the list of open files for the
+  // current thread
   struct file_descriptor *fd_struct = malloc(sizeof(struct file_descriptor));
   fd_struct->file = f;
   fd_struct->fd = thread_current()->next_fd;
@@ -217,7 +205,7 @@ int open (const char *file) {
   return fd_struct->fd;
 }
 
-int filesize (int fd) {
+int filesize(int fd) {
   // find the file descriptor struct corresponding to the given fd
   struct file_descriptor *fd_struct = find_file_by_fd(fd);
 
@@ -228,30 +216,30 @@ int filesize (int fd) {
   return size;
 }
 
-int read (int fd, void *buffer, unsigned size) {
-  (void) fd;
-  (void) buffer;
-  (void) size;
+int read(int fd, void *buffer, unsigned size) {
+  (void)fd;
+  (void)buffer;
+  (void)size;
   return -1;
 }
 
-int write (int fd, const void *buffer, unsigned size) {
-  (void) fd;
-  (void) buffer;
-  (void) size;
+int write(int fd, const void *buffer, unsigned size) {
+  (void)fd;
+  (void)buffer;
+  (void)size;
   return -1;
 }
 
-void seek (int fd, unsigned position) {
+void seek(int fd, unsigned position) {
   // To be implemented...
 }
 
-unsigned tell (int fd) {
-  (void) fd;
+unsigned tell(int fd) {
+  (void)fd;
   return 0;
 }
 
-void close (int fd) {
+void close(int fd) {
   // find the file descriptor struct corresponding to the given fd
   struct file_descriptor *fd_struct = find_file_by_fd(fd);
 
@@ -268,8 +256,10 @@ struct file_descriptor *find_file_by_fd(int fd) {
   struct thread *cur = thread_current();
   struct list_elem *e;
 
-  for (e = list_begin(&cur->files); e != list_end(&cur->files); e = list_next(e)) {
-    struct file_descriptor *fd_struct = list_entry(e, struct file_descriptor, elem);
+  for (e = list_begin(&cur->files); e != list_end(&cur->files);
+       e = list_next(e)) {
+    struct file_descriptor *fd_struct =
+        list_entry(e, struct file_descriptor, elem);
     if (fd_struct->fd == fd) {
       return fd_struct;
     }
