@@ -91,6 +91,7 @@ struct thread {
   int next_fd;               /* The next file descriptor to be assigned. */
   struct list files;         /* List of all open files. */
   struct list semaphores;    /* List of all acquired semaphores. */
+  struct file *exec_file;
   //
   // uint32_t
   //     pagedir; // Gamal: page directory referencem, should be assigned to

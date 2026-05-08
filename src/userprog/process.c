@@ -150,33 +150,36 @@ void process_exit(void) {
   printf("%s: exit(%d)\n", cur->name, cur->exit_status);
 
   // 1. Close all files
-    while (!list_empty(&cur->files)) {
-        struct list_elem *e = list_pop_front(&cur->files);
-        struct file_descriptor *f = list_entry(e, struct file_descriptor, elem);
-        file_close(f->file);
-        free(f);
-    }
+  while (!list_empty(&cur->files)) {
+    struct list_elem *e = list_pop_front(&cur->files);
+    struct file_descriptor *f = list_entry(e, struct file_descriptor, elem);
+    file_close(f->file);
+    free(f);
+  }
+  if (cur->exec_file != NULL) {
+    file_close(cur->exec_file);
+  }
 
-    // 2. Clean up exited children
-    struct list_elem *e = list_begin(&cur->child_list);
-    while (e != list_end(&cur->child_list)) {
-        struct child_status *cs = list_entry(e, struct child_status, elem);
-        if (cs->is_exited) {
-            struct list_elem *next = list_next(e);
-            list_remove(e);
-            free(cs);
-            e = next;
-        } else {
-            e = list_next(e);
-        }
+  // 2. Clean up exited children
+  struct list_elem *e = list_begin(&cur->child_list);
+  while (e != list_end(&cur->child_list)) {
+    struct child_status *cs = list_entry(e, struct child_status, elem);
+    if (cs->is_exited) {
+      struct list_elem *next = list_next(e);
+      list_remove(e);
+      free(cs);
+      e = next;
+    } else {
+      e = list_next(e);
     }
+  }
 
-    // 3. Signal parent LAST, after all cleanup is done
-    if (cur->child_status != NULL) {
-        cur->child_status->exit_status = cur->exit_status;
-        cur->child_status->is_exited = true;
-        sema_up(&cur->child_status->wait_sema);
-    }
+  // 3. Signal parent LAST, after all cleanup is done
+  if (cur->child_status != NULL) {
+    cur->child_status->exit_status = cur->exit_status;
+    cur->child_status->is_exited = true;
+    sema_up(&cur->child_status->wait_sema);
+  }
 
   /* Destroy the current process's page directory and switch back
 to the kernel-only page directory. */
@@ -376,7 +379,11 @@ Don't read anything from disk. */
 
 done:
   /* We arrive here whether the load is successful or not. */
-  file_close(file);
+  if (success) {
+    thread_current()->exec_file = file;
+  } else {
+    file_close(file);
+  }
   return success;
 }
 

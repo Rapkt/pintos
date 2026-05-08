@@ -8,8 +8,6 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "userprog/process.h"
-#include "filesys/filesys.h"
-#include "filesys/file.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <syscall-nr.h>
@@ -29,6 +27,7 @@ static void syscall_handler(struct intr_frame *f) {
   char *buffer;
   int size;
   char *file;
+  char *cmd_line;
   switch (syscall) {
   case SYS_HALT:
     halt();
@@ -37,7 +36,9 @@ static void syscall_handler(struct intr_frame *f) {
     exit(get_arg((int *)f->esp + 1));
     break;
   case SYS_EXEC:
-    f->eax = exec(get_ptr_arg((int *)f->esp + 1));
+    cmd_line = get_ptr_arg((int *)f->esp + 1);
+    validate_str(cmd_line); // Validate the string before executing!
+    f->eax = exec(cmd_line);
     break;
   case SYS_WAIT:
     f->eax = wait(get_arg((int *)f->esp + 1));
@@ -111,31 +112,34 @@ void validate_str(const char *str) {
 }
 
 static void validate_buffer(void *buffer, int size) {
-  for (int i = 0; i < size; i++) {
-    check_ptr((char *)buffer + i);
-  }
+  check_buffer(buffer, size);
 }
 
 // Gamal: validates pointer to input, if valid it derefernces it and returns it
 // Gamal: Example use: get_arg((int *)fd->esp + i), where 'i' is the agrument
 // number. ya3ny lw 3ayz awl arg, yeb2a 1, lw tany arg yeb2a 2...
 int get_arg(const int *ptr) {
-  check_ptr(ptr);
+  check_buffer((void *)ptr, 4);
   return *ptr;
 }
 void *get_ptr_arg(const void *ptr) {
   /* ptr is pointer to a stack word that holds an address. */
-  check_ptr(ptr);
+  check_buffer((void *)ptr, 4);
   void *addr = *(void *const *)ptr;
   check_ptr(addr);
   return addr;
 }
 
 // Gamal: validates whether pointer is valid or not
-void check_ptr(const void *ptr) {
-  if (ptr == NULL || !is_user_vaddr(ptr) ||
-      pagedir_get_page(thread_current()->pagedir, ptr) == NULL) {
-    exit(-1);
+void check_ptr(const void *ptr) { check_buffer(ptr, 1); }
+
+void check_buffer(const void *ptr, unsigned size) {
+  for (int i = 0; i < size; i++) {
+    const char *p = (const char *)ptr + i;
+    if (p == NULL || !is_user_vaddr(p) ||
+        pagedir_get_page(thread_current()->pagedir, p) == NULL) {
+      exit(-1);
+    }
   }
 }
 
@@ -200,7 +204,7 @@ int filesize(int fd) {
   return size;
 }
 
-int read (int fd, void *buffer, unsigned size) {
+int read(int fd, void *buffer, unsigned size) {
   if (fd == 0) {
     for (unsigned i = 0; i < size; i++) {
       ((char *)buffer)[i] = input_getc();
@@ -210,7 +214,8 @@ int read (int fd, void *buffer, unsigned size) {
 
   // find the file descriptor struct corresponding to the given fd
   struct file_descriptor *fd_struct = find_file_by_fd(fd);
-  if (fd_struct == NULL) return -1;
+  if (fd_struct == NULL)
+    return -1;
 
   lock_acquire(&files_lock);
   int bytes_read = file_read(fd_struct->file, buffer, size);
@@ -219,7 +224,7 @@ int read (int fd, void *buffer, unsigned size) {
   return bytes_read;
 }
 
-int write (int fd, const void *buffer, unsigned size) {
+int write(int fd, const void *buffer, unsigned size) {
   // if fd is 1, write to console using putbuf and return size
   if (fd == 1) {
     putbuf(buffer, size);
@@ -228,7 +233,8 @@ int write (int fd, const void *buffer, unsigned size) {
 
   // find the file descriptor struct corresponding to the given fd
   struct file_descriptor *fd_struct = find_file_by_fd(fd);
-  if (fd_struct == NULL) exit(-1); // if fd is invalid, exit with error status
+  if (fd_struct == NULL)
+    exit(-1); // if fd is invalid, exit with error status
 
   lock_acquire(&files_lock);
   int bytes_written = file_write(fd_struct->file, buffer, size);
@@ -237,7 +243,7 @@ int write (int fd, const void *buffer, unsigned size) {
   return bytes_written;
 }
 
-void seek (int fd, unsigned position) {
+void seek(int fd, unsigned position) {
   // find the file descriptor struct corresponding to the given fd
   struct file_descriptor *fd_struct = find_file_by_fd(fd);
 
@@ -246,7 +252,7 @@ void seek (int fd, unsigned position) {
   lock_release(&files_lock);
 }
 
-unsigned tell (int fd) {
+unsigned tell(int fd) {
   // find the file descriptor struct corresponding to the given fd
   struct file_descriptor *fd_struct = find_file_by_fd(fd);
 
@@ -257,10 +263,11 @@ unsigned tell (int fd) {
   return position;
 }
 
-void close (int fd) {
+void close(int fd) {
   // find the file descriptor struct corresponding to the given fd
   struct file_descriptor *fd_struct = find_file_by_fd(fd);
-  if (fd_struct == NULL) exit(-1); // if fd is invalid, exit with error status
+  if (fd_struct == NULL)
+    exit(-1); // if fd is invalid, exit with error status
 
   lock_acquire(&files_lock);
   file_close(fd_struct->file);
